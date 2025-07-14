@@ -153,6 +153,3 @@ class GLM4_1VThinkingFlashAPI(BaseAPI):
                 self.logger.error(f'{type(err)}: {err}')
                 self.logger.error(f'The input messages are {inputs}.')
             return -1, self.fail_msg, ''
-
-    def generate(self, message, dataset=None):
-        return self.generate_inner(message, dataset=dataset)

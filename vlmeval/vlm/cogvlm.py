@@ -3,7 +3,10 @@ from PIL import Image
 from .base import BaseModel
 from ..smp import *
 from ..dataset import DATASET_TYPE
-
+import re
+import torch
+import os
+import traceback
 
 class GLM4v(BaseModel):
 
@@ -42,6 +45,89 @@ class GLM4v(BaseModel):
             outputs = outputs[:, inputs['input_ids'].shape[1]:]
             response = self.tokenizer.decode(outputs[0])
         return response.split(self.end_text_token)[0]
+    
+class GLM4_1v(BaseModel):
+
+    def __init__(self, model_path='THUDM/GLM-4.1V-9B-Thinking', **kwargs):
+        from transformers import AutoProcessor, Glm4vForConditionalGeneration
+        self.device = 'cuda'
+        self.model_path = "THUDM/GLM-4.1V-9B-Thinking"
+        self.cache_dir = "/workspace/mmdoctor/model"
+        self.verbose = True
+        self.processor = AutoProcessor.from_pretrained(
+            self.model_path,
+            use_fast=True,
+            cache_dir=self.cache_dir,
+            local_files_only=True
+        )
+
+        self.model = Glm4vForConditionalGeneration.from_pretrained(
+            pretrained_model_name_or_path=self.model_path,
+            torch_dtype=torch.bfloat16,
+            cache_dir=self.cache_dir,
+            local_files_only=True
+        ).to(self.device)
+
+    def build_msgs(self, msgs_raw, system_prompt=None, dataset=None):
+        msgs = cp.deepcopy(msgs_raw)
+        content = []
+        for i, msg in enumerate(msgs):
+            if msg['type'] == 'text':
+                content.append(dict(type='text', text=msg['value']))
+            elif msg['type'] == 'image':
+                content.append(dict(type='image_url', image_url=dict(url=encode_image_file_to_base64(msg['value']))))
+        if dataset in {'HallusionBench', 'POPE'}:
+            content.append(dict(type="text", text="Please answer yes or no."))
+        ret = [dict(role='user', content=content)]
+        return ret
+    
+    def extract_answer(self, response_text, dataset=None):
+        # remove thinking content
+        pattern_think = r'<think>.*?</think>'
+        response_text = re.sub(pattern_think, '', response_text, flags=re.DOTALL).strip()
+        if dataset in {'OCRBench'}:
+            return response_text
+        # extract box
+        pattern_box = r'<\|begin_of_box\|>(.*?)<\|end_of_box\|>'
+        match = re.search(pattern_box, response_text, re.DOTALL)
+        if match:
+            return match.group(1).strip()
+        return response_text
+    
+    def generate_inner(self, message, dataset=None):
+        try:
+            inputs = message
+            assert isinstance(inputs, str) or isinstance(inputs, list)
+            inputs = [inputs] if isinstance(inputs, str) else inputs
+
+            messages = self.build_msgs(msgs_raw=inputs, dataset=dataset)
+
+            inputs = self.processor.apply_chat_template(
+                messages,
+                tokenize=True,
+                add_generation_prompt=True,
+                return_dict=True,
+                return_tensors="pt"
+            ).to(self.device)
+
+            # ✅ 执行生成
+            generated_ids = self.model.generate(**inputs, max_new_tokens=8192)
+
+            # ✅ 解码输出
+            answer = self.processor.decode(
+                generated_ids[0][inputs["input_ids"].shape[1]:],
+                skip_special_tokens=True
+            )
+            if self.verbose:
+                # print(f'inputs: {inputs}\nanswer: {answer}')
+                print("normal output")
+            return self.extract_answer(answer, dataset=dataset)
+        except Exception as err:
+            if self.verbose:
+                print("error output")
+                print(type(inputs))
+                traceback.print_exc()
+            return 'Failed to obtain answer via API. '
 
 
 class CogVlm(BaseModel):

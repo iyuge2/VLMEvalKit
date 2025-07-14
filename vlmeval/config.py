@@ -390,6 +390,9 @@ api_models = {
     "GLM4_1VThinkingFlash": partial(
         GLM4_1VThinkingFlashAPI, model="GLM-4.1V-Thinking-Flash", temperature=0, retry=10
     ),
+    "GLM4_1VThinkingFlash_weight": partial(
+        GLM4_1v, model_path="THUDM/GLM-4.1V-9B-Thinking"
+    ),
     # MiniMax abab
     "abab6.5s": partial(
         GPT4V,

@@ -2,6 +2,7 @@ from ..smp import *
 import os
 import sys
 from .base import BaseAPI
+from openai import OpenAI
 
 APIBASES = {
     'OFFICIAL': 'https://api.openai.com/v1/chat/completions',
@@ -194,44 +195,63 @@ class OpenAIWrapper(BaseAPI):
         temperature = kwargs.pop('temperature', self.temperature)
         max_tokens = kwargs.pop('max_tokens', self.max_tokens)
 
-        # Will send request if use Azure, dk how to use openai client for it
-        if self.use_azure:
-            headers = {'Content-Type': 'application/json', 'api-key': self.key}
-        elif 'internvl2-pro' in self.model:
-            headers = {'Content-Type': 'application/json', 'Authorization': self.key}
-        else:
-            headers = {'Content-Type': 'application/json', 'Authorization': f'Bearer {self.key}'}
-        payload = dict(
-            model=self.model,
+        client = OpenAI(api_key="sk-eGMzK13PwrCaeWrcTHqwAVRAETeFHTgc", base_url="https://api-gateway.glm.ai/v1")
+
+        print(f"transfer to gpt-4o-2024-08-06")
+        # print(f"transfer to gpt-4o-mini-2024-07-18")
+
+        # 非流式调用（包含图片）
+
+        print(input_msgs)
+        
+        response = client.chat.completions.create(
+            model="gpt-4o-2024-08-06",
             messages=input_msgs,
-            n=1,
-            temperature=temperature,
-            **kwargs)
+            max_tokens=max_tokens,
+            temperature=temperature   
+        )
+        ret_code = 0
+        answer = response.choices[0].message.content
+        print(answer)
 
-        if self.o1_model:
-            payload['max_completion_tokens'] = max_tokens
-            payload.pop('temperature')
-        else:
-            payload['max_tokens'] = max_tokens
+        # # Will send request if use Azure, dk how to use openai client for it
+        # if self.use_azure:
+        #     headers = {'Content-Type': 'application/json', 'api-key': self.key}
+        # elif 'internvl2-pro' in self.model:
+        #     headers = {'Content-Type': 'application/json', 'Authorization': self.key}
+        # else:
+        #     headers = {'Content-Type': 'application/json', 'Authorization': f'Bearer {self.key}'}
+        # payload = dict(
+        #     model=self.model,
+        #     messages=input_msgs,
+        #     n=1,
+        #     temperature=temperature,
+        #     **kwargs)
 
-        if 'gemini' in self.model:
-            payload.pop('max_tokens')
-            payload.pop('n')
-            payload['reasoning_effort'] = 'high'
+        # if self.o1_model:
+        #     payload['max_completion_tokens'] = max_tokens
+        #     payload.pop('temperature')
+        # else:
+        #     payload['max_tokens'] = max_tokens
 
-        response = requests.post(
-            self.api_base,
-            headers=headers, data=json.dumps(payload), timeout=self.timeout * 1.1)
-        ret_code = response.status_code
-        ret_code = 0 if (200 <= int(ret_code) < 300) else ret_code
-        answer = self.fail_msg
-        try:
-            resp_struct = json.loads(response.text)
-            answer = resp_struct['choices'][0]['message']['content'].strip()
-        except Exception as err:
-            if self.verbose:
-                self.logger.error(f'{type(err)}: {err}')
-                self.logger.error(response.text if hasattr(response, 'text') else response)
+        # if 'gemini' in self.model:
+        #     payload.pop('max_tokens')
+        #     payload.pop('n')
+        #     payload['reasoning_effort'] = 'high'
+
+        # response = requests.post(
+        #     self.api_base,
+        #     headers=headers, data=json.dumps(payload), timeout=self.timeout * 1.1)
+        # ret_code = response.status_code
+        # ret_code = 0 if (200 <= int(ret_code) < 300) else ret_code
+        # answer = self.fail_msg
+        # try:
+        #     resp_struct = json.loads(response.text)
+        #     answer = resp_struct['choices'][0]['message']['content'].strip()
+        # except Exception as err:
+        #     if self.verbose:
+        #         self.logger.error(f'{type(err)}: {err}')
+        #         self.logger.error(response.text if hasattr(response, 'text') else response)
 
         return ret_code, answer, response
 

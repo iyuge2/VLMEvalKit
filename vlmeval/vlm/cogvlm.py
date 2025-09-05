@@ -91,7 +91,7 @@ class GLMThinking(BaseModel):
                 tensor_parallel_size=tp_size,
                 gpu_memory_utilization=kwargs.get("gpu_utils", 0.9),
             )
-        else:        
+        else:
             if "GLM-4.5V" in model_path:
                 from transformers import Glm4vMoeForConditionalGeneration
                 self.model = Glm4vMoeForConditionalGeneration.from_pretrained(
